@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AQUA SYNERGY | 流體粒子交互視覺系統</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Three.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <!-- Google Fonts: Cinzel, Plus Jakarta Sans & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            brand: ['Cinzel', 'serif'],
+            sans: ['Plus Jakarta Sans', 'Noto Sans TC', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            aqua: {
+              deep: '#030b1e',
+              sapphire: '#0052cc',
+              electric: '#00d2ff',
+              foam: '#e6fbff',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    * {
+      box-sizing: border-box;
+      user-select: none;
+    }
+    body {
+      background-color: #02060f;
+      color: #e2e8f0;
+      overflow-x: hidden;
+      font-family: 'Plus Jakarta Sans', 'Noto Sans TC', sans-serif;
+    }
+    /* 現代極簡玻璃擬態面板 */
+    .glass-panel {
+      background: rgba(3, 10, 24, 0.62);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(0, 210, 255, 0.06);
+    }
+    .glass-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94a3b8;
+      transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    .glass-btn:hover {
+      background: rgba(0, 210, 255, 0.08);
+      border-color: rgba(0, 210, 255, 0.32);
+      color: #f1f5f9;
+      transform: translateY(-1px);
+    }
+    .glass-btn.active {
+      background: rgba(0, 210, 255, 0.16);
+      border-color: rgba(0, 225, 255, 0.6);
+      box-shadow: 0 0 16px rgba(0, 210, 255, 0.22);
+      color: #ffffff;
+    }
+
+    /* 極簡精緻 Range Slider */
+    input[type="range"] {
+      -webkit-appearance: none;
+      appearance: none;
+      background: transparent;
+    }
+    input[type="range"]::-webkit-slider-runnable-track {
+      height: 4px;
+      background: rgba(255, 255, 255, 0.09);
+      border-radius: 9999px;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 13px;
+      height: 13px;
+      border-radius: 50%;
+      background: #00d2ff;
+      margin-top: -4.5px;
+      box-shadow: 0 0 10px rgba(0, 210, 255, 0.65);
+      border: 2px solid #ffffff;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    input[type="range"]:hover::-webkit-slider-thumb {
+      transform: scale(1.15);
+      box-shadow: 0 0 14px rgba(0, 210, 255, 0.9);
+    }
+
+    /* 捲軸美化 */
+    ::-webkit-scrollbar {
+      width: 3px;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 210, 255, 0.15);
+      border-radius: 9999px;
+    }
+  </style>
+</head>
+
+<body class="w-full h-screen relative bg-[#02060f] overflow-hidden">
+
+  <!-- WebGL 粒子畫布畫布容器 -->
+  <div id="canvas-container" class="absolute inset-0 w-full h-full z-0 pointer-events-auto"></div>
+
+  <!-- 背景暗角與微妙環境輝光 -->
+  <div class="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(circle_at_75%_50%,rgba(0,180,255,0.05)_0%,transparent_65%)]"></div>
+  <div class="pointer-events-none absolute inset-0 z-[1] bg-[radial-gradient(ellipse_at_bottom_left,rgba(0,40,120,0.1)_0%,transparent_55%)]"></div>
+
+  <!-- 頂部品牌導航欄 -->
+  <header class="absolute top-0 left-0 w-full z-20 px-6 sm:px-12 py-5 flex items-center justify-between pointer-events-none border-b border-white/[0.04] backdrop-blur-[4px]">
+    <div class="flex items-center space-x-3 pointer-events-auto">
+      <div class="relative w-7 h-7 rounded-full border border-cyan-400/30 flex items-center justify-center shadow-[0_0_10px_rgba(0,210,255,0.25)]">
+        <div class="w-2.5 h-2.5 rounded-full bg-gradient-to-tr from-blue-500 via-cyan-400 to-white animate-pulse"></div>
+      </div>
+      <div>
+        <h1 class="font-brand tracking-widest text-base font-bold bg-gradient-to-r from-white via-cyan-100 to-cyan-300 bg-clip-text text-transparent">
+          AQUA·SYNERGY
+        </h1>
+        <p class="text-[9px] tracking-widest text-slate-400 uppercase font-mono">Oceanic Taiji Particle System</p>
+      </div>
+    </div>
+
+    <!-- 狀態標籤與循環進度 -->
+    <div class="hidden sm:flex items-center space-x-2.5 pointer-events-auto">
+      <div class="flex items-center space-x-2.5 px-3 py-1.5 rounded-full text-xs font-mono bg-white/[0.03] border border-white/[0.08] text-slate-300">
+        <span class="text-[10px] text-slate-400 tracking-wide uppercase">Phase</span>
+        <span id="cycle-state-text" class="text-cyan-300 font-medium">標誌湧動</span>
+        <div class="w-14 h-1 bg-white/10 rounded-full overflow-hidden">
+          <div id="cycle-progress-bar" class="h-full bg-cyan-400 transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+      <span class="inline-flex items-center px-3 py-1.5 rounded-full text-xs font-mono bg-white/[0.03] border border-white/[0.08] text-slate-300">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-2 animate-pulse"></span>
+        <span id="fps-display" class="tracking-tight text-slate-200">60 FPS</span>
+      </span>
+    </div>
+  </header>
+
+  <!-- 主內容容器 -->
+  <main class="relative z-10 w-full h-full flex flex-col lg:flex-row items-center justify-between px-6 sm:px-12 lg:px-16 pointer-events-none">
+    
+    <!-- 左側品牌概念與交互面板 -->
+    <section class="w-full lg:max-w-md mt-24 lg:mt-0 flex flex-col space-y-4 pointer-events-auto">
+      
+      <!-- 品牌引言與主題標題 -->
+      <div class="space-y-2">
+        <div class="inline-flex items-center space-x-2 px-2.5 py-0.5 rounded-full text-[10px] font-mono tracking-wider uppercase bg-cyan-400/10 border border-cyan-400/20 text-cyan-300">
+          <span class="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+          <span>Hydro-Dynamics · 36S Cycle</span>
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-bold tracking-tight text-white leading-tight">
+          萬物若水 · <br class="hidden sm:inline" />
+          <span class="bg-gradient-to-r from-cyan-300 via-sky-100 to-white bg-clip-text text-transparent">
+            生命太極流體
+          </span>
+        </h2>
+        <p class="text-xs text-slate-400 leading-relaxed font-light">
+          提取深邃海潮藍與破曉浪花白的陰陽共生幾何。粒子於「標誌凝聚」與「浩瀚星雲」間呼吸幻化，游標穿梭觸發微流動漣漪。
+        </p>
+      </div>
+
+      <!-- 形態生命循環控制 -->
+      <div class="space-y-1.5">
+        <div class="flex items-center justify-between">
+          <label class="text-[10px] font-mono uppercase tracking-wider text-slate-400 flex items-center">
+            <svg class="w-3 h-3 mr-1 text-cyan-400/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+            形態流轉 (Morph Mode)
+          </label>
+          <button id="btn-pause" class="text-[10px] font-mono px-2.5 py-0.5 rounded-full border border-white/10 text-slate-300 hover:border-cyan-400/40 hover:text-cyan-200 transition flex items-center space-x-1">
+            <span id="btn-pause-icon">⏸</span>
+            <span id="btn-pause-text">暫停</span>
+          </button>
+        </div>
+        <div class="grid grid-cols-3 gap-2">
+          <button id="btn-cycle-auto" class="glass-btn active px-3 py-2 rounded-xl text-xs flex flex-col items-center justify-center">
+            <span class="font-medium">36s 自然循環</span>
+            <span class="text-[9px] opacity-60 font-mono mt-0.5">Auto</span>
+          </button>
+          <button id="btn-cycle-logo" class="glass-btn px-3 py-2 rounded-xl text-xs flex flex-col items-center justify-center">
+            <span class="font-medium">凝聚標誌</span>
+            <span class="text-[9px] opacity-60 font-mono mt-0.5">Logo</span>
+          </button>
+          <button id="btn-cycle-nebula" class="glass-btn px-3 py-2 rounded-xl text-xs flex flex-col items-center justify-center">
+            <span class="font-medium">散為星雲</span>
+            <span class="text-[9px] opacity-60 font-mono mt-0.5">Nebula</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 即時物理參數調控台 -->
+      <div class="glass-panel p-4 rounded-2xl space-y-3">
+        <div class="flex items-center justify-between border-b border-white/[0.06] pb-2">
+          <span class="text-xs font-mono tracking-wider text-slate-300 font-medium flex items-center">
+            <span class="w-1.5 h-1.5 rounded-full bg-cyan-400 mr-2 shadow-[0_0_6px_#00f0ff]"></span>
+            流體物理場控制
+          </span>
+          <button id="btn-reset" class="text-[10px] font-mono text-slate-400 hover:text-cyan-300 transition">重置參數</button>
+        </div>
+
+        <div class="space-y-2.5 text-xs">
+          <!-- 流速 -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span class="text-slate-400">海流流速</span>
+              <span id="val-speed" class="font-mono text-cyan-300">1.0x</span>
+            </div>
+            <input id="slider-speed" type="range" min="0.2" max="2.5" step="0.05" value="1.0" class="w-full cursor-pointer" />
+          </div>
+
+          <!-- 游標擾動力 -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span class="text-slate-400">游標旋流擾動力</span>
+              <span id="val-force" class="font-mono text-cyan-300">1.6</span>
+            </div>
+            <input id="slider-force" type="range" min="0.2" max="3.0" step="0.1" value="1.6" class="w-full cursor-pointer" />
+          </div>
+
+          <!-- 輝光與散色 -->
+          <div>
+            <div class="flex justify-between text-slate-300 mb-1">
+              <span class="text-slate-400">粒子光芒核芯大小</span>
+              <span id="val-size" class="font-mono text-cyan-300">1.3</span>
+            </div>
+            <input id="slider-size" type="range" min="0.6" max="2.5" step="0.1" value="1.3" class="w-full cursor-pointer" />
+          </div>
+        </div>
+
+        <!-- 激起共振與引導 -->
+        <div class="pt-1.5 flex items-center justify-between text-[11px] text-slate-400 font-light border-t border-white/[0.04]">
+          <span class="flex items-center text-[10px]">
+            <svg class="w-3 h-3 mr-1 text-cyan-400/80" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"/></svg>
+            穿梭擾流 · 點擊激盪
+          </span>
+          <button id="btn-resonate" class="px-3 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-300 text-[10px] font-mono border border-cyan-400/30 transition active:scale-95">
+            激起共振 ✦
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 右側視覺中心引導 -->
+    <div class="w-full lg:w-auto mt-4 lg:mt-0 flex justify-center lg:justify-end pb-6 lg:pb-0 pointer-events-none">
+      <div class="text-center lg:text-right space-y-0.5 text-slate-400/40 text-[10px] font-mono">
+        <p>AQUA TAIJI ENGINE v3.0 // DUAL CORE</p>
+        <p>36,000 PARTICLES · 36S LIFE HARMONY</p>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // 基礎參數配置
+    const CONFIG = {
+      particleCount: 36000,        // 36,000 粒子
+      radius: 180,                 // 核心太極球半徑
+      speed: 1.0,                  // 旋轉與擾動速度倍率
+      mouseForce: 1.6,             // 游標旋流排斥力
+      particleSizeScale: 1.3,      // 粒子尺寸基數
+      cycleMode: 'auto',           // 'auto' | 'logo' | 'nebula'
+      cycleDuration: 36.0,         // 完整聚散循環 36 秒
+      isPaused: false,             // 暫停/播放
+      burstIntensity: 0.0,         // 衝擊波爆發值
+      burstRadius: 0.0             // 衝擊波環前緣半徑
+    };
+
+    const container = document.getElementById('canvas-container');
+
+    let scene, camera, renderer, particleGeometry, particleMaterial, particleSystem;
+    let baseLogoPositions, baseNebulaPositions;
+    let particleMeta = [];
+
+    const mouse = {
+      x: 9999,
+      y: 9999,
+      targetX: 9999,
+      targetY: 9999,
+      prevWorldPos: new THREE.Vector3(9999, 9999, 0),
+      isHovered: false,
+      worldPos: new THREE.Vector3(9999, 9999, 0)
+    };
+
+    let centerOffsetX = 0;
+    let cycleTime = 0;
+    let currentMorphT = 0.0;
+
+    function createGlowParticleTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = 128;
+      canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+
+      const center = 64;
+      const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+
+      gradient.addColorStop(0.0, 'rgba(255, 255, 255, 1.0)');
+      gradient.addColorStop(0.12, 'rgba(240, 252, 255, 0.98)');
+      gradient.addColorStop(0.28, 'rgba(0, 230, 255, 0.75)');
+      gradient.addColorStop(0.55, 'rgba(0, 120, 255, 0.4)');
+      gradient.addColorStop(0.82, 'rgba(0, 45, 140, 0.15)');
+      gradient.addColorStop(1.0, 'rgba(0, 0, 0, 0.0)');
+
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 128, 128);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.generateMipmaps = true;
+      return texture;
+    }
+
+    function evaluateTaijiWave(x, y, R) {
+      const angle = -0.45;
+      const cosA = Math.cos(angle);
+      const sinA = Math.sin(angle);
+      const rx = x * cosA - y * sinA;
+      const ry = x * sinA + y * cosA;
+
+      const d = Math.hypot(rx, ry);
+      if (d > R * 1.05) return { inDisk: false, isWhite: false, d, rx, ry };
+
+      const halfR = R * 0.5;
+      const distUpper = Math.hypot(rx, ry - halfR);
+      const distLower = Math.hypot(rx, ry + halfR);
+
+      let isWhite = false;
+      if (distUpper < halfR) {
+        isWhite = true;
+      } else if (distLower < halfR) {
+        isWhite = false;
+      } else {
+        isWhite = rx > 0;
+      }
+
+      return { inDisk: true, isWhite, d, rx, ry };
+    }
+
+    function initParticles() {
+      const count = CONFIG.particleCount;
+      particleGeometry = new THREE.BufferGeometry();
+
+      const positions = new Float32Array(count * 3);
+      baseLogoPositions = new Float32Array(count * 3);
+      baseNebulaPositions = new Float32Array(count * 3);
+      const colors = new Float32Array(count * 3);
+      const sizes = new Float32Array(count);
+      particleMeta = [];
+
+      const R = CONFIG.radius;
+
+      const colorDeepAbyss = new THREE.Color('#002b80');
+      const colorSapphire = new THREE.Color('#0055d4');
+      const colorElectricCyan = new THREE.Color('#00f0ff');
+      const colorFoamWhite = new THREE.Color('#ffffff');
+      const colorSoftCyan = new THREE.Color('#b8f5ff');
+
+      for (let i = 0; i < count; i++) {
+        let lx, ly, lz;
+        let isLargeDroplet = false;
+        let isSplashDrop = false;
+        const pType = Math.random();
+
+        if (pType < 0.72) {
+          const r = R * Math.pow(Math.random(), 0.65);
+          const th = Math.random() * Math.PI * 2;
+          lx = r * Math.cos(th);
+          ly = r * Math.sin(th);
+          const zArc = Math.sqrt(Math.max(0, R * R - r * r)) * 0.4;
+          lz = (Math.random() - 0.5) * zArc + (Math.random() - 0.5) * 8;
+        } else if (pType < 0.92) {
+          isSplashDrop = true;
+          const th = Math.random() * Math.PI * 2;
+          const r = R * (0.98 + Math.pow(Math.random(), 1.8) * 0.45);
+          lx = r * Math.cos(th);
+          ly = r * Math.sin(th);
+          lz = (Math.random() - 0.5) * 35;
+        } else {
+          isLargeDroplet = true;
+          const r = R * (0.2 + Math.random() * 0.75);
+          const th = Math.random() * Math.PI * 2;
+          lx = r * Math.cos(th);
+          ly = r * Math.sin(th);
+          lz = (Math.random() - 0.5) * 20;
+        }
+
+        const waveInfo = evaluateTaijiWave(lx, ly, R);
+        const isWhite = waveInfo.isWhite;
+
+        const nebArms = 3;
+        const nebArmIndex = Math.floor(Math.random() * nebArms);
+        const armAngle = (nebArmIndex * (Math.PI * 2 / nebArms));
+        const nebDist = R * 0.35 + Math.pow(Math.random(), 0.75) * (R * 2.2);
+        const nebSpiral = armAngle + nebDist * 0.012 + (Math.random() - 0.5) * 0.7;
+        const nx = nebDist * Math.cos(nebSpiral) + (Math.random() - 0.5) * 40;
+        const ny = nebDist * Math.sin(nebSpiral) + (Math.random() - 0.5) * 40;
+        const nz = (Math.random() - 0.5) * (nebDist * 0.55);
+
+        const pColor = new THREE.Color();
+        let pSize = 1.0;
+
+        if (isWhite) {
+          if (isLargeDroplet || Math.random() < 0.2) {
+            pColor.copy(colorFoamWhite);
+            pSize = 2.8 + Math.random() * 2.8;
+          } else if (Math.random() < 0.6) {
+            pColor.copy(colorSoftCyan);
+            pSize = 1.6 + Math.random() * 1.5;
+          } else {
+            pColor.copy(colorElectricCyan);
+            pSize = 1.3 + Math.random() * 1.4;
+          }
+        } else {
+          if (isLargeDroplet) {
+            pColor.copy(colorElectricCyan);
+            pSize = 2.5 + Math.random() * 2.5;
+          } else if (Math.random() < 0.5) {
+            pColor.copy(colorSapphire);
+            pSize = 1.5 + Math.random() * 1.6;
+          } else {
+            pColor.copy(colorDeepAbyss);
+            pSize = 1.2 + Math.random() * 1.3;
+          }
+        }
+
+        if (Math.random() < 0.035) {
+          pSize *= 2.0;
+          pColor.lerp(new THREE.Color('#ffffff'), 0.9);
+        }
+
+        const idx = i * 3;
+        positions[idx] = lx;
+        positions[idx + 1] = ly;
+        positions[idx + 2] = lz;
+
+        baseLogoPositions[idx] = lx;
+        baseLogoPositions[idx + 1] = ly;
+        baseLogoPositions[idx + 2] = lz;
+
+        baseNebulaPositions[idx] = nx;
+        baseNebulaPositions[idx + 1] = ny;
+        baseNebulaPositions[idx + 2] = nz;
+
+        colors[idx] = pColor.r;
+        colors[idx + 1] = pColor.g;
+        colors[idx + 2] = pColor.b;
+
+        sizes[i] = pSize;
+
+        particleMeta.push({
+          logoAngle: Math.atan2(ly, lx),
+          logoR: Math.hypot(lx, ly),
+          baseZ: lz,
+          nebulaR: nebDist,
+          nebulaAngle: nebSpiral,
+          speedFactor: 0.75 + Math.random() * 0.5,
+          isWhite: isWhite,
+          isSplash: isSplashDrop,
+          isLarge: isLargeDroplet,
+          morphDelay: Math.random() * 0.25,
+          phase: Math.random() * Math.PI * 2,
+          vx: 0,
+          vy: 0,
+          vz: 0
+        });
+      }
+
+      particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      particleGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+      particleGeometry.setAttribute('size', new THREE.BufferAttribute(sizes, 1));
+
+      particleMaterial = new THREE.PointsMaterial({
+        size: CONFIG.particleSizeScale * 3.6,
+        vertexColors: true,
+        map: createGlowParticleTexture(),
+        transparent: true,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false,
+        opacity: 0.94
+      });
+
+      particleSystem = new THREE.Points(particleGeometry, particleMaterial);
+      scene.add(particleSystem);
+    }
+
+    function initScene() {
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 3500);
+      camera.position.z = 520;
+
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance'
+      });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      container.appendChild(renderer.domElement);
+
+      initParticles();
+      updateLayoutOffset();
+
+      window.addEventListener('resize', onWindowResize);
+    }
+
+    function updateLayoutOffset() {
+      const w = window.innerWidth;
+      if (w >= 1024) {
+        centerOffsetX = Math.min(w * 0.18, 180);
+        camera.position.z = 490;
+      } else {
+        centerOffsetX = 0;
+        camera.position.z = w < 640 ? 600 : 530;
+      }
+      if (particleSystem) {
+        particleSystem.position.x = centerOffsetX;
+      }
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      updateLayoutOffset();
+    }
+
+    let clock = new THREE.Clock();
+    let frameCount = 0;
+    let lastFpsTime = performance.now();
+    const fpsElem = document.getElementById('fps-display');
+    const cycleStateElem = document.getElementById('cycle-state-text');
+    const cycleProgressBar = document.getElementById('cycle-progress-bar');
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      const delta = clock.getDelta();
+
+      frameCount++;
+      const now = performance.now();
+      if (now - lastFpsTime >= 1000) {
+        if (fpsElem) fpsElem.innerText = `${frameCount} FPS`;
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+
+      const stepDelta = CONFIG.isPaused ? 0 : delta * CONFIG.speed;
+      if (!CONFIG.isPaused) {
+        cycleTime += stepDelta;
+      }
+
+      let targetT = 0.0;
+      if (CONFIG.cycleMode === 'auto') {
+        const loopT = (cycleTime % CONFIG.cycleDuration);
+        const progressPct = (loopT / CONFIG.cycleDuration) * 100;
+        if (cycleProgressBar) cycleProgressBar.style.width = `${progressPct.toFixed(1)}%`;
+
+        if (loopT < 12.0) {
+          targetT = 0.0;
+          if (cycleStateElem) cycleStateElem.innerText = '標誌凝聚態';
+        } else if (loopT < 18.0) {
+          const sub = (loopT - 12.0) / 6.0;
+          targetT = sub * sub * (3 - 2 * sub);
+          if (cycleStateElem) cycleStateElem.innerText = '散開為星雲 ↗';
+        } else if (loopT < 30.0) {
+          targetT = 1.0;
+          if (cycleStateElem) cycleStateElem.innerText = '海洋星雲態';
+        } else {
+          const sub = (loopT - 30.0) / 6.0;
+          targetT = 1.0 - sub * sub * (3 - 2 * sub);
+          if (cycleStateElem) cycleStateElem.innerText = '重新凝聚中 ↘';
+        }
+      } else if (CONFIG.cycleMode === 'logo') {
+        targetT = 0.0;
+        if (cycleStateElem) cycleStateElem.innerText = '定格：標誌凝聚';
+        if (cycleProgressBar) cycleProgressBar.style.width = '0%';
+      } else if (CONFIG.cycleMode === 'nebula') {
+        targetT = 1.0;
+        if (cycleStateElem) cycleStateElem.innerText = '定格：海洋星雲';
+        if (cycleProgressBar) cycleProgressBar.style.width = '100%';
+      }
+
+      currentMorphT += (targetT - currentMorphT) * 0.04;
+
+      mouse.x += (mouse.targetX - mouse.x) * 0.22;
+      mouse.y += (mouse.targetY - mouse.y) * 0.22;
+
+      if (mouse.isHovered) {
+        const vector = new THREE.Vector3(
+          (mouse.x / window.innerWidth) * 2 - 1,
+          -(mouse.y / window.innerHeight) * 2 + 1,
+          0.5
+        );
+        vector.unproject(camera);
+        const dir = vector.sub(camera.position).normalize();
+        const dist = -camera.position.z / dir.z;
+        mouse.worldPos.copy(camera.position).add(dir.multiplyScalar(dist));
+        mouse.worldPos.x -= centerOffsetX;
+      } else {
+        mouse.worldPos.set(9999, 9999, 0);
+      }
+
+      if (CONFIG.burstIntensity > 0.01) {
+        CONFIG.burstRadius += 14.0 * (CONFIG.speed || 1.0);
+        CONFIG.burstIntensity *= 0.96;
+      } else {
+        CONFIG.burstIntensity = 0;
+        CONFIG.burstRadius = 0;
+      }
+
+      const positions = particleGeometry.attributes.position.array;
+      const count = CONFIG.particleCount;
+      const mouseRange = 130 * CONFIG.mouseForce;
+      const mouseRangeSq = mouseRange * mouseRange;
+
+      const tTotal = cycleTime * CONFIG.speed;
+
+      for (let i = 0; i < count; i++) {
+        const idx = i * 3;
+        const meta = particleMeta[i];
+
+        const pT = Math.min(1.0, Math.max(0.0, (currentMorphT - meta.morphDelay) / (1.0 - meta.morphDelay)));
+
+        meta.logoAngle += 0.009 * meta.speedFactor * (meta.isWhite ? 1.05 : 0.95);
+        const breath = Math.sin(tTotal * 1.8 + meta.phase) * (meta.isSplash ? 8 : 3.5);
+        const curR = meta.logoR + breath;
+        const lx = curR * Math.cos(meta.logoAngle);
+        const ly = curR * Math.sin(meta.logoAngle);
+        const lz = meta.baseZ + Math.cos(tTotal * 2.2 + meta.phase) * 5.0;
+
+        meta.nebulaAngle += (140 / (meta.nebulaR + 60)) * 0.016 * meta.speedFactor;
+        const nebR = meta.nebulaR + Math.sin(tTotal * 1.5 + meta.phase) * 12;
+        const nx = nebR * Math.cos(meta.nebulaAngle);
+        const ny = nebR * Math.sin(meta.nebulaAngle);
+        const nz = (Math.sin(tTotal * 1.2 + meta.nebulaAngle) * 35) + meta.baseZ * 1.5;
+
+        let targetX = lx * (1.0 - pT) + nx * pT;
+        let targetY = ly * (1.0 - pT) + ny * pT;
+        let targetZ = lz * (1.0 - pT) + nz * pT;
+
+        if (CONFIG.burstIntensity > 0.01) {
+          const dCenter = Math.hypot(targetX, targetY);
+          const waveDist = Math.abs(dCenter - CONFIG.burstRadius);
+          if (waveDist < 45) {
+            const push = (1.0 - waveDist / 45) * CONFIG.burstIntensity * 32.0;
+            targetX += (targetX / (dCenter + 0.1)) * push;
+            targetY += (targetY / (dCenter + 0.1)) * push;
+            targetZ += push * (Math.sin(meta.phase) > 0 ? 1 : -1) * 0.6;
+          }
+        }
+
+        const dx = positions[idx] - mouse.worldPos.x;
+        const dy = positions[idx + 1] - mouse.worldPos.y;
+        const distSq = dx * dx + dy * dy;
+
+        if (distSq < mouseRangeSq && mouse.isHovered) {
+          const dist = Math.sqrt(distSq);
+          const force = (1.0 - dist / mouseRange) * 24.0 * CONFIG.mouseForce;
+          meta.vx += (dx / dist) * force;
+          meta.vy += (dy / dist) * force;
+          meta.vx += -(dy / dist) * force * 0.7;
+          meta.vy += (dx / dist) * force * 0.7;
+        }
+
+        const spring = 0.065;
+        const damping = 0.84;
+
+        meta.vx += (targetX - positions[idx]) * spring;
+        meta.vy += (targetY - positions[idx + 1]) * spring;
+        meta.vz += (targetZ - positions[idx + 2]) * spring;
+
+        meta.vx *= damping;
+        meta.vy *= damping;
+        meta.vz *= damping;
+
+        positions[idx] += meta.vx;
+        positions[idx + 1] += meta.vy;
+        positions[idx + 2] += meta.vz;
+      }
+
+      particleGeometry.attributes.position.needsUpdate = true;
+
+      if (particleSystem) {
+        particleSystem.rotation.z = Math.sin(tTotal * 0.2) * 0.06;
+        particleSystem.rotation.x = Math.sin(tTotal * 0.25) * 0.08;
+        particleSystem.rotation.y = Math.cos(tTotal * 0.22) * 0.08;
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function initInteractions() {
+      window.addEventListener('mousemove', (e) => {
+        mouse.targetX = e.clientX;
+        mouse.targetY = e.clientY;
+        mouse.isHovered = true;
+      });
+
+      window.addEventListener('mouseleave', () => {
+        mouse.isHovered = false;
+      });
+
+      window.addEventListener('touchstart', (e) => {
+        if (e.touches.length > 0) {
+          mouse.targetX = e.touches[0].clientX;
+          mouse.targetY = e.touches[0].clientY;
+          mouse.isHovered = true;
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchmove', (e) => {
+        if (e.touches.length > 0) {
+          mouse.targetX = e.touches[0].clientX;
+          mouse.targetY = e.touches[0].clientY;
+          mouse.isHovered = true;
+        }
+      }, { passive: true });
+
+      window.addEventListener('touchend', () => {
+        mouse.isHovered = false;
+      });
+
+      const triggerBurst = () => {
+        CONFIG.burstIntensity = 1.8;
+        CONFIG.burstRadius = 10;
+      };
+
+      window.addEventListener('pointerdown', (e) => {
+        if (!e.target.closest('button') && !e.target.closest('input')) {
+          triggerBurst();
+        }
+      });
+
+      const resonateBtn = document.getElementById('btn-resonate');
+      if (resonateBtn) resonateBtn.addEventListener('click', triggerBurst);
+
+      const pauseBtn = document.getElementById('btn-pause');
+      const pauseIcon = document.getElementById('btn-pause-icon');
+      const pauseText = document.getElementById('btn-pause-text');
+
+      pauseBtn.addEventListener('click', () => {
+        CONFIG.isPaused = !CONFIG.isPaused;
+        if (CONFIG.isPaused) {
+          pauseIcon.innerText = '▶';
+          pauseText.innerText = '播放';
+          pauseBtn.classList.add('bg-cyan-400/20', 'border-cyan-300/50');
+        } else {
+          pauseIcon.innerText = '⏸';
+          pauseText.innerText = '暫停';
+          pauseBtn.classList.remove('bg-cyan-400/20', 'border-cyan-300/50');
+        }
+      });
+
+      const cycleButtons = {
+        auto: document.getElementById('btn-cycle-auto'),
+        logo: document.getElementById('btn-cycle-logo'),
+        nebula: document.getElementById('btn-cycle-nebula')
+      };
+
+      const setCycleMode = (mode) => {
+        CONFIG.cycleMode = mode;
+        Object.keys(cycleButtons).forEach(m => {
+          if (cycleButtons[m]) {
+            if (m === mode) {
+              cycleButtons[m].classList.add('active');
+            } else {
+              cycleButtons[m].classList.remove('active');
+            }
+          }
+        });
+        CONFIG.burstIntensity = 1.0;
+        CONFIG.burstRadius = 5;
+      };
+
+      if (cycleButtons.auto) cycleButtons.auto.addEventListener('click', () => setCycleMode('auto'));
+      if (cycleButtons.logo) cycleButtons.logo.addEventListener('click', () => setCycleMode('logo'));
+      if (cycleButtons.nebula) cycleButtons.nebula.addEventListener('click', () => setCycleMode('nebula'));
+
+      const speedSlider = document.getElementById('slider-speed');
+      const speedVal = document.getElementById('val-speed');
+      speedSlider.addEventListener('input', (e) => {
+        CONFIG.speed = parseFloat(e.target.value);
+        speedVal.innerText = `${CONFIG.speed.toFixed(1)}x`;
+      });
+
+      const forceSlider = document.getElementById('slider-force');
+      const forceVal = document.getElementById('val-force');
+      forceSlider.addEventListener('input', (e) => {
+        CONFIG.mouseForce = parseFloat(e.target.value);
+        forceVal.innerText = CONFIG.mouseForce.toFixed(1);
+      });
+
+      const sizeSlider = document.getElementById('slider-size');
+      const sizeVal = document.getElementById('val-size');
+      sizeSlider.addEventListener('input', (e) => {
+        CONFIG.particleSizeScale = parseFloat(e.target.value);
+        sizeVal.innerText = CONFIG.particleSizeScale.toFixed(1);
+        if (particleMaterial) {
+          particleMaterial.size = CONFIG.particleSizeScale * 3.6;
+        }
+      });
+
+      const resetBtn = document.getElementById('btn-reset');
+      resetBtn.addEventListener('click', () => {
+        CONFIG.speed = 1.0;
+        speedSlider.value = 1.0;
+        speedVal.innerText = '1.0x';
+
+        CONFIG.mouseForce = 1.6;
+        forceSlider.value = 1.6;
+        forceVal.innerText = '1.6';
+
+        CONFIG.particleSizeScale = 1.3;
+        sizeSlider.value = 1.3;
+        sizeVal.innerText = '1.3';
+        if (particleMaterial) particleMaterial.size = 1.3 * 3.6;
+
+        CONFIG.isPaused = false;
+        pauseIcon.innerText = '⏸';
+        pauseText.innerText = '暫停';
+        pauseBtn.classList.remove('bg-cyan-400/20', 'border-cyan-300/50');
+
+        setCycleMode('auto');
+      });
+    }
+
+    window.onload = () => {
+      initScene();
+      initInteractions();
+      animate();
+    };
+  </script>
+</body>
+</html>
